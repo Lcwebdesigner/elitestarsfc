@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "name": "Origi",
+    "position": "Goalkeeper",
+    "number": 1,
+    "photo": "",
+    "stats": { "appearances": 12, "goals": 0, "assists": 0 }
+  },
+  {
+    "id": 2,
+    "name": "AuntyBoss",
+    "position": "Defender",
+    "number": 2,
+    "photo": "",
+    "stats": { "appearances": 10, "goals": 1, "assists": 2 }
+  },
+  {
+    "id": 3,
+    "name": "Fred",
+    "position": "Defender",
+    "number": 3,
+    "photo": "",
+    "stats": { "appearances": 11, "goals": 0, "assists": 1 }
+  },
+  {
+    "id": 4,
+    "name": "Phillip",
+    "position": "Midfielder",
+    "number": 4,
+    "photo": "",
+    "stats": { "appearances": 12, "goals": 3, "assists": 4 }
+  },
+  {
+    "id": 5,
+    "name": "Evans",
+    "position": "Midfielder",
+    "number": 5,
+    "photo": "",
+    "stats": { "appearances": 9, "goals": 2, "assists": 3 }
+  },
+  {
+    "id": 6,
+    "name": "Mose",
+    "position": "Forward",
+    "number": 6,
+    "photo": "",
+    "stats": { "appearances": 12, "goals": 8, "assists": 2 }
+  }
+]
