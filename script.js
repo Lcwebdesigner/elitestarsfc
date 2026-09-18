@@ -1,33 +1,137 @@
 document.addEventListener("DOMContentLoaded", function () {
+    const menuToggle = document.getElementById("menuToggle");
+    const navMenu = document.getElementById("navMenu");
+
+    /* ---------- MOBILE MENU ---------- */
+
+    if (menuToggle && navMenu) {
+        menuToggle.addEventListener("click", function () {
+            navMenu.classList.toggle("active");
+            menuToggle.textContent =
+                navMenu.classList.contains("active") ? "✕" : "☰";
+        });
+
+        document.querySelectorAll(".nav-menu a").forEach(function (link) {
+            link.addEventListener("click", function () {
+                navMenu.classList.remove("active");
+                menuToggle.textContent = "☰";
+            });
+        });
+    }
+
+    /* ---------- COUNTERS ---------- */
+
+    const counters = document.querySelectorAll(".counter");
+
+    if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(function (entries, observer) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+
+                const counter = entry.target;
+                const target = Number(counter.dataset.target);
+                let current = 0;
+                const increment = Math.max(1, Math.ceil(target / 40));
+
+                function updateCounter() {
+                    current += increment;
+
+                    if (current >= target) {
+                        counter.textContent = target;
+                        return;
+                    }
+
+                    counter.textContent = current;
+                    requestAnimationFrame(updateCounter);
+                }
+
+                updateCounter();
+                observer.unobserve(counter);
+            });
+        }, { threshold: 0.5 });
+
+        counters.forEach(function (counter) {
+            observer.observe(counter);
+        });
+    } else {
+        counters.forEach(function (counter) {
+            counter.textContent = counter.dataset.target || "0";
+        });
+    }
+
+    /* ---------- YEAR ---------- */
+
+    const yearElement = document.getElementById("year");
+
+    if (yearElement) {
+        yearElement.textContent = new Date().getFullYear();
+    }
+
+    /* ---------- LOAD CONTENT ---------- */
+
     loadSquad();
     loadFixtures();
     loadNews();
 });
 
-/* =========================
-   SUPABASE CONFIGURATION
-========================= */
 
-const SUPABASE_URL = "https://qwftlxobrdhthpfkbqhq.supabase.co";
-const SUPABASE_KEY = "sb_publishable_ayuGaIFLxTUE8Htw329SAw_8w7XiskU";
+/* =========================================================
+   SUPABASE
+========================================================= */
 
-const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
+const SUPABASE_URL =
+    "https://qwftlxobrdhthpfkbqhq.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_ayuGaIFLxTUE8Htw329SAw_8w7XiskU";
+
+let supabaseClient = null;
 
 
-/* =========================
-   LOAD SQUAD FROM SUPABASE
-========================= */
+function initSupabase() {
+
+    if (supabaseClient) {
+        return supabaseClient;
+    }
+
+    if (
+        !window.supabase ||
+        typeof window.supabase.createClient !== "function"
+    ) {
+        console.error("Supabase library was not loaded.");
+        return null;
+    }
+
+    supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
+
+    return supabaseClient;
+}
+
+
+/* =========================================================
+   SQUAD
+========================================================= */
 
 async function loadSquad() {
+
     const grid = document.getElementById("playersGrid");
 
-    if (!grid) return;
+    if (!grid) {
+        return;
+    }
 
     try {
-        const { data, error } = await supabaseClient
+
+        const client = initSupabase();
+
+        if (!client) {
+            throw new Error("Supabase client unavailable.");
+        }
+
+        const { data, error } = await client
             .from("players")
             .select("*")
             .order("number", {
@@ -40,33 +144,43 @@ async function loadSquad() {
             throw error;
         }
 
-        const players = (data || []).map(function (player) {
-            return {
-                id: player.id,
-                name: player.name,
-                position: player.position,
-                number: player.number,
-                photo: player.photo || "",
-                stats: {
-                    appearances: player.appearances || 0,
-                    goals: player.goals || 0,
-                    assists: player.assists || 0
-                }
-            };
-        });
+        if (!Array.isArray(data) || data.length === 0) {
 
-        if (players.length === 0) {
             grid.innerHTML =
                 '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">No players added yet.</p>';
+
             return;
         }
 
-        grid.innerHTML = players
-            .map(renderPlayerCard)
-            .join("");
+        grid.innerHTML = data.map(function (player, index) {
+
+            return renderPlayerCard(
+                {
+                    id: player.id,
+                    name: player.name,
+                    position: player.position,
+                    number: player.number,
+                    photo: player.photo || "",
+
+                    stats: {
+                        appearances:
+                            player.appearances || 0,
+
+                        goals:
+                            player.goals || 0,
+
+                        assists:
+                            player.assists || 0
+                    }
+                },
+                index
+            );
+
+        }).join("");
 
     } catch (error) {
-        console.error("Failed to load squad:", error);
+
+        console.error("Squad load error:", error);
 
         grid.innerHTML =
             '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">Squad data unavailable.</p>';
@@ -74,369 +188,331 @@ async function loadSquad() {
 }
 
 
-/* =========================
+/* =========================================================
    PLAYER CARD
-========================= */
+========================================================= */
 
-function renderPlayerCard(player) {
+function renderPlayerCard(player, index) {
 
-    const photo = player.photo
-        ? player.photo
-        : "https://via.placeholder.com/400x400?text=Player";
+    const number =
+        player.number != null
+            ? String(player.number).padStart(2, "0")
+            : String(index + 1).padStart(2, "0");
 
-    return `
-        <div class="player-card">
+    const name =
+        escapeHtml(player.name || "Unnamed");
 
-            <div class="player-image">
-                <img
-                    src="${photo}"
-                    alt="${player.name}"
-                    loading="lazy"
-                    onerror="this.src='https://via.placeholder.com/400x400?text=Player';"
-                >
+    const position =
+        escapeHtml(player.position || "");
 
-                <span class="player-number">
-                    ${player.number || ""}
-                </span>
-            </div>
+    const stats =
+        player.stats || {};
 
-            <div class="player-info">
+    const apps =
+        stats.appearances != null
+            ? stats.appearances
+            : 0;
 
-                <h3>${player.name || "Player"}</h3>
+    const goals =
+        stats.goals != null
+            ? stats.goals
+            : 0;
 
-                <p class="player-position">
-                    ${player.position || "Player"}
-                </p>
+    const assists =
+        stats.assists != null
+            ? stats.assists
+            : 0;
 
-                <div class="player-stats">
 
-                    <div>
-                        <strong>${player.stats.appearances}</strong>
-                        <span>Apps</span>
-                    </div>
+    const media = player.photo
 
-                    <div>
-                        <strong>${player.stats.goals}</strong>
-                        <span>Goals</span>
-                    </div>
+        ? '<img class="player-photo" src="' +
+          escapeHtml(player.photo) +
+          '" alt="' +
+          name +
+          '" loading="lazy" decoding="async">'
 
-                    <div>
-                        <strong>${player.stats.assists}</strong>
-                        <span>Assists</span>
-                    </div>
+        : '<div class="player-placeholder">ES</div>';
 
-                </div>
 
-            </div>
+    return '' +
 
-        </div>
-    `;
+        '<article class="player-card">' +
+
+            '<div class="player-number">' +
+                number +
+            '</div>' +
+
+            media +
+
+            '<div class="player-info">' +
+
+                '<span>PLAYER ' +
+                    number +
+                '</span>' +
+
+                '<h3>' +
+                    name +
+                '</h3>' +
+
+                '<p>' +
+                    position +
+                '</p>' +
+
+                '<div class="player-stats">' +
+
+                    '<div>' +
+                        '<strong>' +
+                            apps +
+                        '</strong>' +
+                        '<span>Apps</span>' +
+                    '</div>' +
+
+                    '<div>' +
+                        '<strong>' +
+                            goals +
+                        '</strong>' +
+                        '<span>Goals</span>' +
+                    '</div>' +
+
+                    '<div>' +
+                        '<strong>' +
+                            assists +
+                        '</strong>' +
+                        '<span>Assists</span>' +
+                    '</div>' +
+
+                '</div>' +
+
+            '</div>' +
+
+        '</article>';
 }
 
 
-/* =========================
-   LOAD FIXTURES
-========================= */
-
-async function loadFixtures() {
-
-    try {
-
-        const response = await fetch("fixtures.json");
-
-        if (!response.ok) {
-            throw new Error("Unable to load fixtures.json");
-        }
-
-        const fixtures = await response.json();
-
-        const container =
-            document.getElementById("fixturesGrid") ||
-            document.getElementById("fixturesContainer");
-
-        if (!container) return;
-
-        if (!fixtures || fixtures.length === 0) {
-            container.innerHTML =
-                '<p style="text-align:center;">No fixtures available.</p>';
-            return;
-        }
-
-        container.innerHTML = fixtures.map(function (fixture) {
-
-            return `
-                <div class="fixture-card">
-
-                    <div class="fixture-date">
-                        ${fixture.date || ""}
-                    </div>
-
-                    <div class="fixture-teams">
-                        <span>${fixture.home || "Elite Stars FC"}</span>
-                        <strong>VS</strong>
-                        <span>${fixture.away || ""}</span>
-                    </div>
-
-                    <div class="fixture-info">
-                        ${fixture.time || ""}
-                        ${fixture.venue ? " • " + fixture.venue : ""}
-                    </div>
-
-                </div>
-            `;
-
-        }).join("");
-
-    } catch (error) {
-
-        console.error("Fixtures error:", error);
-
-    }
-}
-
-
-/* =========================
-   LOAD NEWS
-========================= */
-
-async function loadNews() {
-
-    try {
-
-        const response = await fetch("news.json");
-
-        if (!response.ok) {
-            throw new Error("Unable to load news.json");
-        }
-
-        const news = await response.json();
-
-        const container =
-            document.getElementById("newsGrid") ||
-            document.getElementById("newsContainer");
-
-        if (!container) return;
-
-        if (!news || news.length === 0) {
-            container.innerHTML =
-                '<p style="text-align:center;">No news available.</p>';
-            return;
-        }
-
-        container.innerHTML = news.map(function (item) {
-
-            return `
-                <article class="news-card">
-
-                    ${item.image ? `
-                        <img
-                            src="${item.image}"
-                            alt="${item.title || "Elite Stars FC news"}"
-                            loading="lazy"
-                        >
-                    ` : ""}
-
-                    <div class="news-content">
-
-                        <small>
-                            ${item.date || ""}
-                        </small>
-
-                        <h3>
-                            ${item.title || ""}
-                        </h3>
-
-                        <p>
-                            ${item.description || item.content || ""}
-                        </p>
-
-                    </div>
-
-                </article>
-            `;
-
-        }).join("");
-
-    } catch (error) {
-
-        console.error("News error:", error);
-
-    }
-}                requestAnimationFrame(updateCounter);
-            };
-
-            updateCounter();
-            observer.unobserve(counter);
-        });
-    }, { threshold: 0.5 });
-
-    counters.forEach(function (counter) {
-        observer.observe(counter);
-    });
-
-    document.getElementById("year").textContent = new Date().getFullYear();
-
-    loadSquad();
-    loadFixtures();
-    loadNews();
-});
-
-/* ---------- SUPABASE ---------- */
-
-const SUPABASE_URL = "https://qwftlxobrdhthpfkbhqh.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ayuGaIFLxTUE8Htw329SAw_8w7XiskU";
-const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_PUBLISHABLE_KEY
-);
-
-/* ---------- SQUAD ---------- */
-
-async function loadSquad() {
-    const grid = document.getElementById("playersGrid");
-    if (!grid) return;
-
-    try {
-        const { data, error } = await supabaseClient
-            .from("players")
-            .select("*")
-            .order("number", { ascending: true, nullsFirst: false });
-
-        if (error) throw error;
-
-        const players = (data || []).map(function (p) {
-            return {
-                id: p.id,
-                name: p.name,
-                position: p.position,
-                number: p.number,
-                photo: p.photo || "",
-                stats: {
-                    appearances: p.appearances || 0,
-                    goals: p.goals || 0,
-                    assists: p.assists || 0
-                }
-            };
-        });
-
-        if (players.length === 0) {
-            grid.innerHTML = '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">No players added yet.</p>';
-            return;
-        }
-
-        grid.innerHTML = players.map(renderPlayerCard).join("");
-    } catch (err) {
-        console.error("Supabase squad load error:", err);
-
-        /* Keep the existing player.json as a fallback. */
-        fetch("player.json")
-            .then(function (response) {
-                if (!response.ok) throw new Error("Could not load player.json");
-                return response.json();
-            })
-            .then(function (players) {
-                if (!Array.isArray(players) || players.length === 0) {
-                    grid.innerHTML = '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">No players added yet.</p>';
-                    return;
-                }
-                grid.innerHTML = players.map(renderPlayerCard).join("");
-            })
-            .catch(function (fallbackError) {
-                console.error("Squad fallback error:", fallbackError);
-                grid.innerHTML = '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">Squad data unavailable.</p>';
-            });
-    }
-}
-
-/* ---------- FIXTURES ---------- */
+/* =========================================================
+   FIXTURES
+========================================================= */
 
 function loadFixtures() {
-    const list = document.getElementById("fixturesList");
-    if (!list) return;
+
+    const container =
+        document.getElementById("fixturesGrid") ||
+        document.getElementById("fixturesContainer");
+
+    if (!container) {
+        return;
+    }
 
     fetch("fixtures.json")
         .then(function (response) {
-            if (!response.ok) throw new Error("Could not load fixtures.json");
+
+            if (!response.ok) {
+                throw new Error("Could not load fixtures.json");
+            }
+
             return response.json();
         })
+
         .then(function (fixtures) {
+
             if (!Array.isArray(fixtures) || fixtures.length === 0) {
-                list.innerHTML = '<p style="text-align:center;color:var(--gray);">No fixtures scheduled yet.</p>';
+
+                container.innerHTML =
+                    '<p style="text-align:center;color:var(--gray);">No fixtures available.</p>';
+
                 return;
             }
-            list.innerHTML = fixtures.map(renderFixtureCard).join("");
+
+            container.innerHTML =
+                fixtures
+                    .map(renderFixtureCard)
+                    .join("");
         })
-        .catch(function (err) {
-            console.error("Fixtures load error:", err);
-            list.innerHTML = '<p style="text-align:center;color:var(--gray);">Fixture data unavailable.</p>';
+
+        .catch(function (error) {
+
+            console.error("Fixtures load error:", error);
+
+            container.innerHTML =
+                '<p style="text-align:center;color:var(--gray);">Fixtures unavailable.</p>';
         });
 }
 
+
 function renderFixtureCard(fixture) {
-    const homeTeam = escapeHtml(fixture.homeTeam || "TBC");
-    const awayTeam = escapeHtml(fixture.awayTeam || "TBC");
-    const date = escapeHtml(fixture.date || "--");
-    const time = escapeHtml(fixture.time || "--:--");
+
+    const home =
+        escapeHtml(fixture.home || "Home");
+
+    const away =
+        escapeHtml(fixture.away || "Away");
+
+    const date =
+        escapeHtml(fixture.date || "");
+
+    const time =
+        escapeHtml(fixture.time || "");
+
+    const venue =
+        escapeHtml(fixture.venue || "");
 
     return '' +
-      '<article class="fixture-card">' +
-        '<div class="fixture-date"><span>DATE</span><strong>' + date + '</strong></div>' +
-        '<div class="fixture-teams">' +
-          '<div><strong>' + homeTeam + '</strong><small>HOME</small></div>' +
-          '<span class="vs">VS</span>' +
-          '<div><strong>' + awayTeam + '</strong><small>AWAY</small></div>' +
-        '</div>' +
-        '<div class="fixture-time">' + time + '</div>' +
-      '</article>';
+
+        '<article class="fixture-card">' +
+
+            '<div class="fixture-date">' +
+                date +
+            '</div>' +
+
+            '<div class="fixture-teams">' +
+
+                '<strong>' +
+                    home +
+                '</strong>' +
+
+                '<span>VS</span>' +
+
+                '<strong>' +
+                    away +
+                '</strong>' +
+
+            '</div>' +
+
+            '<div class="fixture-details">' +
+
+                (time
+                    ? '<span>' + time + '</span>'
+                    : '') +
+
+                (venue
+                    ? '<span>' + venue + '</span>'
+                    : '') +
+
+            '</div>' +
+
+        '</article>';
 }
 
-/* ---------- NEWS ---------- */
+
+/* =========================================================
+   NEWS
+========================================================= */
 
 function loadNews() {
-    const list = document.getElementById("newsList");
-    if (!list) return;
+
+    const container =
+        document.getElementById("newsGrid") ||
+        document.getElementById("newsContainer");
+
+    if (!container) {
+        return;
+    }
 
     fetch("news.json")
         .then(function (response) {
-            if (!response.ok) throw new Error("Could not load news.json");
+
+            if (!response.ok) {
+                throw new Error("Could not load news.json");
+            }
+
             return response.json();
         })
+
         .then(function (news) {
+
             if (!Array.isArray(news) || news.length === 0) {
-                list.innerHTML = '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">No news posted yet.</p>';
+
+                container.innerHTML =
+                    '<p style="text-align:center;color:var(--gray);">No news available.</p>';
+
                 return;
             }
-            list.innerHTML = news.map(renderNewsCard).join("");
+
+            container.innerHTML =
+                news
+                    .map(renderNewsCard)
+                    .join("");
         })
-        .catch(function (err) {
-            console.error("News load error:", err);
-            list.innerHTML = '<p style="text-align:center;color:var(--gray);grid-column:1/-1;">News unavailable.</p>';
+
+        .catch(function (error) {
+
+            console.error("News load error:", error);
+
+            container.innerHTML =
+                '<p style="text-align:center;color:var(--gray);">News unavailable.</p>';
         });
 }
 
+
 function renderNewsCard(item) {
-    const title = escapeHtml(item.title || "Untitled");
-    const date = escapeHtml(item.date || "");
-    const content = escapeHtml(item.content || "");
-    const image = item.image
-        ? '<img class="news-image" src="' + escapeHtml(item.image) + '" alt="' + title + '" loading="lazy" decoding="async" width="400" height="160">'
-        : '';
+
+    const title =
+        escapeHtml(item.title || "Elite Stars FC");
+
+    const description =
+        escapeHtml(
+            item.description ||
+            item.excerpt ||
+            ""
+        );
+
+    const date =
+        escapeHtml(item.date || "");
+
+    const image =
+        item.image
+            ? '<img src="' +
+              escapeHtml(item.image) +
+              '" alt="' +
+              title +
+              '" loading="lazy">'
+            : "";
+
 
     return '' +
-      '<article class="news-card">' +
-        image +
-        (date ? '<div class="news-date">' + date + '</div>' : '') +
-        '<h3>' + title + '</h3>' +
-        '<p>' + content + '</p>' +
-      '</article>';
+
+        '<article class="news-card">' +
+
+            image +
+
+            '<div class="news-content">' +
+
+                (date
+                    ? '<span class="news-date">' +
+                      date +
+                      '</span>'
+                    : '') +
+
+                '<h3>' +
+                    title +
+                '</h3>' +
+
+                '<p>' +
+                    description +
+                '</p>' +
+
+            '</div>' +
+
+        '</article>';
 }
 
-/* ---------- SHARED ---------- */
 
-function escapeHtml(str) {
-    return String(str)
+/* =========================================================
+   SECURITY / HTML ESCAPING
+========================================================= */
+
+function escapeHtml(value) {
+
+    return String(value)
+
         .replace(/&/g, "&amp;")
+
         .replace(/</g, "&lt;")
+
         .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
+
+        .replace(/"/g, "&quot;")
+
+        .replace(/'/g, "&#039;");
+                          }
