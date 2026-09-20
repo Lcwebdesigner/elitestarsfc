@@ -261,12 +261,6 @@ function renderPlayerCard(player, index) {
 
                 '<div class="player-stats">' +
 
-                    '<div>' +
-                        '<strong>' +
-                            apps +
-                        '</strong>' +
-                        '<span>Apps</span>' +
-                    '</div>' +
 
                     '<div>' +
                         '<strong>' +
